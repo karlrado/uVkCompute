@@ -38,7 +38,7 @@ void RegisterVulkanBenchmarks(
   for (int shift = 20; shift < 26; ++shift) {  // Number of bytes: 1M -> 32M
     int num_bytes = 1 << shift;
     for (const memory::ShaderCode &shader : memory::GetShaderCodeCases()) {
-      double avg_latency_seconds = 0;
+      static double avg_latency_seconds = 0;
       memory::RegisterCopyStorageBufferBenchmark(
           gpu_name, device, num_bytes, shader, latency_measure->mode,
           &latency_measure->overhead_seconds, &avg_latency_seconds);
