@@ -60,6 +60,20 @@ absl::StatusOr<uint32_t> SelectQueueFamily(VkPhysicalDevice physical_device,
   symbols.vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count,
                                                    queue_families.data());
 
+  if (queue_flags == VK_QUEUE_TRANSFER_BIT) {
+    VkQueueFlags queue_mask =
+        VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
+    for (int index = 0; index < count; ++index) {
+      const VkQueueFamilyProperties &properties = queue_families[index];
+      if (properties.queueCount > 0 &&
+          ((properties.queueFlags & queue_mask) == queue_flags)) {
+        *valid_timestamp_bits = properties.timestampValidBits;
+        return index;
+      }
+    }
+  }
+  // If no dedicated transfer queue was found, fall through to find any
+  // acceptable queue.
   for (int index = 0; index < count; ++index) {
     const VkQueueFamilyProperties &properties = queue_families[index];
     if (properties.queueCount > 0 &&
@@ -232,6 +246,10 @@ absl::StatusOr<std::unique_ptr<Device>> Driver::CreateDevice(
     const Driver::PhysicalDeviceInfo &physical_device,
     VkQueueFlags queue_flags) {
   uint32_t valid_timestamp_bits = 0;
+  UVKC_ASSIGN_OR_RETURN(
+      uint32_t transfer_queue_family_index,
+      SelectQueueFamily(physical_device.handle, VK_QUEUE_TRANSFER_BIT,
+                        &valid_timestamp_bits, symbols_));
   UVKC_ASSIGN_OR_RETURN(uint32_t queue_family_index,
                         SelectQueueFamily(physical_device.handle, queue_flags,
                                           &valid_timestamp_bits, symbols_));
@@ -246,12 +264,22 @@ absl::StatusOr<std::unique_ptr<Device>> Driver::CreateDevice(
   queue_create_info.queueCount = 1;
   queue_create_info.pQueuePriorities = &queue_priority;
 
+  VkDeviceQueueCreateInfo transfer_queue_create_info = {};
+  transfer_queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+  transfer_queue_create_info.pNext = nullptr;
+  transfer_queue_create_info.flags = 0;
+  transfer_queue_create_info.queueFamilyIndex = transfer_queue_family_index;
+  transfer_queue_create_info.queueCount = 1;
+  transfer_queue_create_info.pQueuePriorities = &queue_priority;
+
+  std::array<VkDeviceQueueCreateInfo, 2> queue_create_infos = {
+      queue_create_info, transfer_queue_create_info};
   VkDeviceCreateInfo device_create_info = {};
   device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   device_create_info.pNext = nullptr;
   device_create_info.flags = 0;
-  device_create_info.queueCreateInfoCount = 1;
-  device_create_info.pQueueCreateInfos = &queue_create_info;
+  device_create_info.queueCreateInfoCount = 2;
+  device_create_info.pQueueCreateInfos = queue_create_infos.data();
   device_create_info.enabledLayerCount = 0;
   device_create_info.ppEnabledLayerNames = nullptr;
   device_create_info.enabledExtensionCount = 0;
@@ -262,9 +290,10 @@ absl::StatusOr<std::unique_ptr<Device>> Driver::CreateDevice(
   VK_RETURN_IF_ERROR(symbols_.vkCreateDevice(physical_device.handle,
                                              &device_create_info,
                                              /*pAllocator=*/nullptr, &device));
-  return Device::Create(
-      physical_device.handle, queue_family_index, valid_timestamp_bits,
-      physical_device.v10_properties.limits.timestampPeriod, device, symbols_);
+  return Device::Create(physical_device.handle, queue_family_index,
+                        transfer_queue_family_index, valid_timestamp_bits,
+                        physical_device.v10_properties.limits.timestampPeriod,
+                        device, symbols_);
 }
 
 Driver::Driver(VkInstance instance, const DynamicSymbols &symbols,

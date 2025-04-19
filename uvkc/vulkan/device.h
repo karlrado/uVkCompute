@@ -46,8 +46,9 @@ class Device {
   // Wraps a logical |device| from |physical_device| of |queue_family_index|.
   static absl::StatusOr<std::unique_ptr<Device>> Create(
       VkPhysicalDevice physical_device, uint32_t queue_family_index,
-      uint32_t valid_timestamp_bits, uint32_t nanoseconds_per_timestamp_value,
-      VkDevice device, const DynamicSymbols &symbols);
+      uint32_t transfer_queue_family_index, uint32_t valid_timestamp_bits,
+      uint32_t nanoseconds_per_timestamp_value, VkDevice device,
+      const DynamicSymbols &symbols);
 
   ~Device();
 
@@ -117,7 +118,8 @@ class Device {
       absl::Span<const BoundImage> bound_images);
 
   // Allocates a primary command buffer.
-  absl::StatusOr<std::unique_ptr<CommandBuffer>> AllocateCommandBuffer();
+  absl::StatusOr<std::unique_ptr<CommandBuffer>> AllocateCommandBuffer(
+      bool transfer = false);
 
   // Resets the command pool and recycles all the sources from all the command
   // buffers allocated from this device thus far.
@@ -128,13 +130,15 @@ class Device {
       uint32_t query_count);
 
   // Submits the given |command_buffer| to the queue.
-  absl::Status QueueSubmitAndWait(const CommandBuffer &command_buffer);
+  absl::Status QueueSubmitAndWait(const CommandBuffer &command_buffer,
+                                  bool transfer = false);
 
  private:
   Device(VkDevice device, VkPhysicalDevice physical_device,
-         uint32_t queue_family_index, uint32_t valid_timestamp_bits,
+         uint32_t queue_family_index, uint32_t transfer_queue_family_index,
+         uint32_t valid_timestamp_bits,
          uint32_t nanoseconds_per_timestamp_value, VkCommandPool command_pool,
-         const DynamicSymbols &symbols);
+         VkCommandPool transfer_command_pool, const DynamicSymbols &symbols);
 
   // Selects a memory type among |supported_memory_types| that statisfies
   // |desired_memory_properties| and returns its array index in
@@ -156,10 +160,13 @@ class Device {
 
   VkQueue queue_;
   uint32_t queue_family_index_;
+  VkQueue transfer_queue_;
+  uint32_t transfer_queue_family_index_;
   uint32_t valid_timestamp_bits_;
   uint32_t nanoseconds_per_timestamp_value_;
 
   VkCommandPool command_pool_;
+  VkCommandPool transfer_command_pool_;
 
   const DynamicSymbols &symbols_;
 };

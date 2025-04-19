@@ -29,8 +29,9 @@ namespace vulkan {
 
 absl::StatusOr<std::unique_ptr<Device>> Device::Create(
     VkPhysicalDevice physical_device, uint32_t queue_family_index,
-    uint32_t valid_timestamp_bits, uint32_t nanoseconds_per_timestamp_value,
-    VkDevice device, const DynamicSymbols &symbols) {
+    uint32_t transfer_queue_family_index, uint32_t valid_timestamp_bits,
+    uint32_t nanoseconds_per_timestamp_value, VkDevice device,
+    const DynamicSymbols &symbols) {
   VkCommandPoolCreateInfo create_info = {};
   create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   create_info.pNext = nullptr;
@@ -41,13 +42,21 @@ absl::StatusOr<std::unique_ptr<Device>> Device::Create(
   VK_RETURN_IF_ERROR(symbols.vkCreateCommandPool(
       device, &create_info, /*pAllocator=*/nullptr, &command_pool));
 
+  VkCommandPool transfer_command_pool = VK_NULL_HANDLE;
+  create_info.queueFamilyIndex = transfer_queue_family_index;
+  VK_RETURN_IF_ERROR(symbols.vkCreateCommandPool(
+      device, &create_info, /*pAllocator=*/nullptr, &transfer_command_pool));
+
   return absl::WrapUnique(new Device(
-      device, physical_device, queue_family_index, valid_timestamp_bits,
-      nanoseconds_per_timestamp_value, command_pool, symbols));
+      device, physical_device, queue_family_index, transfer_queue_family_index,
+      valid_timestamp_bits, nanoseconds_per_timestamp_value, command_pool,
+      transfer_command_pool, symbols));
 }
 
 Device::~Device() {
   symbols_.vkDeviceWaitIdle(device_);
+  symbols_.vkDestroyCommandPool(device_, transfer_command_pool_,
+                                /*pAllocator=*/nullptr);
   symbols_.vkDestroyCommandPool(device_, command_pool_, /*pAllocator=*/nullptr);
   symbols_.vkDestroyDevice(device_, /*pAllocator=*/nullptr);
 }
@@ -270,11 +279,12 @@ absl::Status Device::AttachImageToDescriptor(
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::unique_ptr<CommandBuffer>> Device::AllocateCommandBuffer() {
+absl::StatusOr<std::unique_ptr<CommandBuffer>> Device::AllocateCommandBuffer(
+    bool transfer) {
   VkCommandBufferAllocateInfo allocate_info = {};
   allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
   allocate_info.pNext = nullptr;
-  allocate_info.commandPool = command_pool_;
+  allocate_info.commandPool = transfer ? transfer_command_pool_ : command_pool_;
   allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
   allocate_info.commandBufferCount = 1;
 
@@ -285,8 +295,12 @@ absl::StatusOr<std::unique_ptr<CommandBuffer>> Device::AllocateCommandBuffer() {
 }
 
 absl::Status Device::ResetCommandPool() {
-  return VkResultToStatus(symbols_.vkResetCommandPool(
+  auto s1 = VkResultToStatus(symbols_.vkResetCommandPool(
       device_, command_pool_, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT));
+  auto s2 = VkResultToStatus(
+      symbols_.vkResetCommandPool(device_, transfer_command_pool_,
+                                  VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT));
+  return s1;  // TODO
 }
 
 absl::StatusOr<std::unique_ptr<TimestampQueryPool>>
@@ -296,7 +310,8 @@ Device::CreateTimestampQueryPool(uint32_t query_count) {
                                     query_count, symbols_);
 }
 
-absl::Status Device::QueueSubmitAndWait(const CommandBuffer &command_buffer) {
+absl::Status Device::QueueSubmitAndWait(const CommandBuffer &command_buffer,
+                                        bool transfer) {
   VkFenceCreateInfo fence_create_info = {};
   fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
   fence_create_info.pNext = nullptr;
@@ -312,7 +327,8 @@ absl::Status Device::QueueSubmitAndWait(const CommandBuffer &command_buffer) {
   submit_info.commandBufferCount = 1;
   submit_info.pCommandBuffers = &cmdbuf;
 
-  VK_RETURN_IF_ERROR(symbols_.vkQueueSubmit(queue_, 1, &submit_info, fence));
+  VK_RETURN_IF_ERROR(symbols_.vkQueueSubmit(transfer ? transfer_queue_ : queue_,
+                                            1, &submit_info, fence));
 
   VK_RETURN_IF_ERROR(symbols_.vkWaitForFences(device_, /*fenceCount=*/1, &fence,
                                               /*waitAll=*/true,
@@ -323,21 +339,28 @@ absl::Status Device::QueueSubmitAndWait(const CommandBuffer &command_buffer) {
 }
 
 Device::Device(VkDevice device, VkPhysicalDevice physical_device,
-               uint32_t queue_family_index, uint32_t valid_timestamp_bits,
+               uint32_t queue_family_index,
+               uint32_t transfer_queue_family_index,
+               uint32_t valid_timestamp_bits,
                uint32_t nanoseconds_per_timestamp_value,
-               VkCommandPool command_pool, const DynamicSymbols &symbols)
+               VkCommandPool command_pool, VkCommandPool transfer_command_pool,
+               const DynamicSymbols &symbols)
     : device_(device),
       physical_device_(physical_device),
       memory_properties_(),
       queue_(VK_NULL_HANDLE),
       queue_family_index_(queue_family_index),
+      transfer_queue_family_index_(transfer_queue_family_index),
       valid_timestamp_bits_(valid_timestamp_bits),
       nanoseconds_per_timestamp_value_(nanoseconds_per_timestamp_value),
       command_pool_(command_pool),
+      transfer_command_pool_(transfer_command_pool),
       symbols_(symbols) {
   symbols_.vkGetPhysicalDeviceMemoryProperties(physical_device_,
                                                &memory_properties_);
   symbols_.vkGetDeviceQueue(device_, queue_family_index_, 0, &queue_);
+  symbols_.vkGetDeviceQueue(device_, transfer_queue_family_index_, 0,
+                            &transfer_queue_);
 }
 
 absl::StatusOr<uint32_t> Device::SelectMemoryType(

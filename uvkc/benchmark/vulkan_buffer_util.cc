@@ -36,12 +36,12 @@ absl::Status SetDeviceBufferViaStagingBuffer(
   staging_buffer->UnmapMemory();
 
   // Copy the data to the device.
-  UVKC_ASSIGN_OR_RETURN(auto cmdbuffer, device->AllocateCommandBuffer());
+  UVKC_ASSIGN_OR_RETURN(auto cmdbuffer, device->AllocateCommandBuffer(true));
   UVKC_RETURN_IF_ERROR(cmdbuffer->Begin());
   cmdbuffer->CopyBuffer(*staging_buffer, 0, *device_buffer, 0,
                         buffer_size_in_bytes);
   UVKC_RETURN_IF_ERROR(cmdbuffer->End());
-  UVKC_RETURN_IF_ERROR(device->QueueSubmitAndWait(*cmdbuffer));
+  UVKC_RETURN_IF_ERROR(device->QueueSubmitAndWait(*cmdbuffer, true));
 
   return absl::OkStatus();
 }
@@ -59,12 +59,12 @@ absl::Status GetDeviceBufferViaStagingBuffer(
                            buffer_size_in_bytes));
 
   // Copy the data from the device.
-  UVKC_ASSIGN_OR_RETURN(auto cmdbuffer, device->AllocateCommandBuffer());
+  UVKC_ASSIGN_OR_RETURN(auto cmdbuffer, device->AllocateCommandBuffer(true));
   UVKC_RETURN_IF_ERROR(cmdbuffer->Begin());
   cmdbuffer->CopyBuffer(*device_buffer, 0, *staging_buffer, 0,
                         buffer_size_in_bytes);
   UVKC_RETURN_IF_ERROR(cmdbuffer->End());
-  UVKC_RETURN_IF_ERROR(device->QueueSubmitAndWait(*cmdbuffer));
+  UVKC_RETURN_IF_ERROR(device->QueueSubmitAndWait(*cmdbuffer, true));
 
   UVKC_ASSIGN_OR_RETURN(void *dst_staging_ptr,
                         staging_buffer->MapMemory(0, buffer_size_in_bytes));
