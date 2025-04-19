@@ -81,15 +81,22 @@ static void CopyStorageBuffer(
   // Create buffers
   //===-------------------------------------------------------------------===/
 
+  // These device buffers both need to have TRANSFER_SRC and TRANSFER_DST:
+  // - src_buffer: is SRC for the src_buffer to dst_buffer device copy.
+  // - src_buffer: is DST due to staging -> device copy.
+  // - dst_buffer: is SRC due to device -> staging copy (for verify)
+  // - dst_buffer: is DST for the src_buffer to dst_buffer device copy.
   BM_CHECK_OK_AND_ASSIGN(
       auto src_buffer,
       device->CreateBuffer(
-          VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+          VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer_num_bytes));
   BM_CHECK_OK_AND_ASSIGN(
       auto dst_buffer,
       device->CreateBuffer(
-          VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+          VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer_num_bytes));
 
   //===-------------------------------------------------------------------===/
