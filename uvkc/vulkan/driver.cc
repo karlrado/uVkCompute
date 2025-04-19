@@ -140,6 +140,23 @@ absl::StatusOr<std::unique_ptr<Driver>> Driver::Create(
 
     PopulateDebugMessengerCreateInfo(debugCreateInfo);
     create_info.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&debugCreateInfo;
+#if 0
+    // Turn on Synchronization Validation
+    VkValidationFeatureEnableEXT enables[] = {
+        VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT};
+    VkValidationFeatureDisableEXT disables[] = {
+        VK_VALIDATION_FEATURE_DISABLE_API_PARAMETERS_EXT,
+        VK_VALIDATION_FEATURE_DISABLE_OBJECT_LIFETIMES_EXT,
+        VK_VALIDATION_FEATURE_DISABLE_CORE_CHECKS_EXT};
+    VkValidationFeaturesEXT features = {
+        VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
+        &debugCreateInfo,
+        1,
+        enables,
+        3,
+        disables};
+    create_info.pNext = &features;
+#endif
   }
 #else
   create_info.enabledLayerCount = 0;
@@ -149,8 +166,9 @@ absl::StatusOr<std::unique_ptr<Driver>> Driver::Create(
 #endif
 
   VkInstance instance = VK_NULL_HANDLE;
-  VK_RETURN_IF_ERROR(symbols->vkCreateInstance(
-      &create_info, /*pAllocator=*/nullptr, &instance));
+  VK_RETURN_IF_ERROR(symbols->vkCreateInstance(&create_info,
+                                               /*pAllocator=*/nullptr,
+                                               &instance));
 
   UVKC_RETURN_IF_ERROR(symbols->LoadFromInstance(instance));
 
