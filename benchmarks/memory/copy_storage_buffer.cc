@@ -100,15 +100,30 @@ static void CopyStorageBuffer(
           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer_num_bytes));
 
   //===-------------------------------------------------------------------===/
-  // Clear buffer data
+  // Create staging buffers
+  //===-------------------------------------------------------------------===/
+  BM_CHECK_OK_AND_ASSIGN(
+      auto src_staging_buffer,
+      device->CreateBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                               VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                           buffer_num_bytes));
+
+  BM_CHECK_OK_AND_ASSIGN(
+      auto dst_staging_buffer,
+      device->CreateBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                               VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                           buffer_num_bytes));
+
+  //===-------------------------------------------------------------------===/
+  // Set/Clear buffer data
   //===-------------------------------------------------------------------===/
 
-  BM_CHECK_OK(::uvkc::benchmark::SetDeviceBufferViaStagingBuffer<float>(
-      device, src_buffer.get(), buffer_num_bytes,
-      [](absl::Span<float> dst) { std::iota(dst.begin(), dst.end(), 0.0f); }));
-
-  BM_CHECK_OK(::uvkc::benchmark::SetDeviceBufferViaStagingBuffer<float>(
-      device, dst_buffer.get(), buffer_num_bytes,
+  BM_CHECK_OK(::uvkc::benchmark::SetDeviceBufferViaStagingBuffer2<float>(
+      device, src_staging_buffer.get(), dst_staging_buffer.get(),
+      src_buffer.get(), dst_buffer.get(), buffer_num_bytes,
+      [](absl::Span<float> dst) { std::iota(dst.begin(), dst.end(), 0.0f); },
       [](absl::Span<float> dst) { std::fill(dst.begin(), dst.end(), 0.0f); }));
 
   //===-------------------------------------------------------------------===/

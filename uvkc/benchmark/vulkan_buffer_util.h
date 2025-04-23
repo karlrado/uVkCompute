@@ -32,6 +32,13 @@ absl::Status SetDeviceBufferViaStagingBuffer(
     size_t buffer_size_in_bytes,
     const std::function<void(void *, size_t)> &staging_buffer_setter);
 
+absl::Status SetDeviceBufferViaStagingBuffer2(
+    vulkan::Device *device, vulkan::Buffer *staging_buffer1,
+    vulkan::Buffer *staging_buffer2, vulkan::Buffer *device_buffer1,
+    vulkan::Buffer *device_buffer2, size_t buffer_size_in_bytes,
+    const std::function<void(void *, size_t)> &staging_buffer_setter1,
+    const std::function<void(void *, size_t)> &staging_buffer_setter2);
+
 // Convenience overload of `SetDeviceBufferViaStagingBuffer` that passes
 // in a span of type |ElemetType| to the getter |stagin_beffer_setter|.
 template <typename ElementType>
@@ -44,6 +51,27 @@ absl::Status SetDeviceBufferViaStagingBuffer(
       [&staging_buffer_setter](void *buffer, size_t size) {
         staging_buffer_setter(absl::MakeSpan(static_cast<ElementType *>(buffer),
                                              size / sizeof(ElementType)));
+      });
+}
+
+template <typename ElementType>
+absl::Status SetDeviceBufferViaStagingBuffer2(
+    vulkan::Device *device, vulkan::Buffer *staging_buffer1,
+    vulkan::Buffer *staging_buffer2, vulkan::Buffer *device_buffer1,
+    vulkan::Buffer *device_buffer2, size_t buffer_size_in_bytes,
+    const std::function<void(absl::Span<ElementType>)> &staging_buffer_setter1,
+    const std::function<void(absl::Span<ElementType>)>
+        &staging_buffer_setter2) {
+  return SetDeviceBufferViaStagingBuffer2(
+      device, staging_buffer1, staging_buffer2, device_buffer1, device_buffer2,
+      buffer_size_in_bytes,
+      [&staging_buffer_setter1](void *buffer, size_t size) {
+        staging_buffer_setter1(absl::MakeSpan(
+            static_cast<ElementType *>(buffer), size / sizeof(ElementType)));
+      },
+      [&staging_buffer_setter2](void *buffer, size_t size) {
+        staging_buffer_setter2(absl::MakeSpan(
+            static_cast<ElementType *>(buffer), size / sizeof(ElementType)));
       });
 }
 

@@ -46,6 +46,33 @@ absl::Status SetDeviceBufferViaStagingBuffer(
   return absl::OkStatus();
 }
 
+absl::Status SetDeviceBufferViaStagingBuffer2(
+    vulkan::Device *device, vulkan::Buffer *staging_buffer1,
+    vulkan::Buffer *staging_buffer2, vulkan::Buffer *device_buffer1,
+    vulkan::Buffer *device_buffer2, size_t buffer_size_in_bytes,
+    const std::function<void(void *, size_t)> &staging_buffer_setter1,
+    const std::function<void(void *, size_t)> &staging_buffer_setter2) {
+  UVKC_ASSIGN_OR_RETURN(void *src_staging_ptr1,
+                        staging_buffer1->MapMemory(0, buffer_size_in_bytes));
+  staging_buffer_setter1(src_staging_ptr1, buffer_size_in_bytes);
+  staging_buffer1->UnmapMemory();
+  UVKC_ASSIGN_OR_RETURN(void *src_staging_ptr2,
+                        staging_buffer2->MapMemory(0, buffer_size_in_bytes));
+  staging_buffer_setter2(src_staging_ptr2, buffer_size_in_bytes);
+  staging_buffer2->UnmapMemory();
+
+  // Copy the data to the device.
+  UVKC_ASSIGN_OR_RETURN(auto cmdbuffer, device->AllocateCommandBuffer(true));
+  UVKC_RETURN_IF_ERROR(cmdbuffer->Begin());
+  cmdbuffer->CopyBuffer(*staging_buffer1, 0, *device_buffer1, 0,
+                        buffer_size_in_bytes);
+  cmdbuffer->CopyBuffer(*staging_buffer2, 0, *device_buffer2, 0,
+                        buffer_size_in_bytes);
+  UVKC_RETURN_IF_ERROR(cmdbuffer->End());
+  UVKC_RETURN_IF_ERROR(device->QueueSubmitAndWait(*cmdbuffer, true));
+  return absl::OkStatus();
+}
+
 absl::Status GetDeviceBufferViaStagingBuffer(
     vulkan::Device *device, vulkan::Buffer *device_buffer,
     size_t buffer_size_in_bytes,
