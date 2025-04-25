@@ -38,7 +38,14 @@ void RegisterVulkanBenchmarks(
   for (int shift = 20; shift < 26; ++shift) {  // Number of bytes: 1M -> 32M
     int num_bytes = 1 << shift;
     for (const memory::ShaderCode &shader : memory::GetShaderCodeCases()) {
-      double avg_latency_seconds = 0;
+      // This variable needs to be static so that it doesn't go out of scope.
+      //
+      // The CopyStorageBuffer benchmark can be executed by other benchmarks
+      // when in SystemDispatch latency measure mode to pre-compute an overhead.
+      // This benchmark always writes to this variable, but in this case, it
+      // does not compute an overhead and so the value isn't used, but the
+      // variable still needs to persist outside of this scope.
+      static double avg_latency_seconds = 0;
       memory::RegisterCopyStorageBufferBenchmark(
           gpu_name, device, num_bytes, shader, latency_measure->mode,
           &latency_measure->overhead_seconds, &avg_latency_seconds);
