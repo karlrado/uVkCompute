@@ -150,16 +150,84 @@ absl::StatusOr<std::unique_ptr<Device>> Driver::CreateDevice(
   queue_create_info.queueCount = 1;
   queue_create_info.pQueuePriorities = &queue_priority;
 
+  uint32_t count;
+  VK_RETURN_IF_ERROR(symbols_.vkEnumerateDeviceExtensionProperties(
+      physical_device.handle, nullptr, &count, nullptr));
+  std::vector<VkExtensionProperties> extension_properties(count);
+  VK_RETURN_IF_ERROR(symbols_.vkEnumerateDeviceExtensionProperties(
+      physical_device.handle, nullptr, &count, extension_properties.data()));
+  std::vector<std::string> supported_extensions;
+  supported_extensions.reserve(count);
+  for (auto &extension : extension_properties) {
+    supported_extensions.push_back(extension.extensionName);
+  }
+
+  std::vector<const char *> required_extensions = {
+      VK_KHR_8BIT_STORAGE_EXTENSION_NAME, VK_KHR_16BIT_STORAGE_EXTENSION_NAME};
+
+  for (auto &extension : required_extensions) {
+    if (std::find(supported_extensions.begin(), supported_extensions.end(),
+                  extension) == supported_extensions.end()) {
+      return absl::FailedPreconditionError("Device missing required extension");
+    }
+  }
+
+  VkPhysicalDeviceFeatures2 features2 = {};
+  features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+
+  VkPhysicalDeviceVulkan12Features features12 = {};
+  features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+  features2.pNext = &features12;
+
+  VkPhysicalDevice16BitStorageFeatures feature16BitStorageFeatures = {};
+  feature16BitStorageFeatures.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES;
+  features12.pNext = &feature16BitStorageFeatures;
+
+  symbols_.vkGetPhysicalDeviceFeatures2(physical_device.handle, &features2);
+
+  if (!features2.features.shaderInt16 || !features12.shaderFloat16 ||
+      !features12.shaderInt8 || !features12.storageBuffer8BitAccess ||
+      !features12.uniformAndStorageBuffer8BitAccess ||
+      !features12.vulkanMemoryModel ||
+      !features12.vulkanMemoryModelDeviceScope ||
+      !feature16BitStorageFeatures.storageBuffer16BitAccess ||
+      !feature16BitStorageFeatures.uniformAndStorageBuffer16BitAccess) {
+    return absl::FailedPreconditionError("Device missing required feature");
+  }
+
+  VkPhysicalDeviceFeatures2 set_features2 = {};
+  set_features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+
+  VkPhysicalDeviceVulkan12Features set_features12 = {};
+  set_features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+  set_features2.pNext = &set_features12;
+
+  VkPhysicalDevice16BitStorageFeatures set_16BitStorageFeatures = {};
+  set_16BitStorageFeatures.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES;
+  set_features12.pNext = &set_16BitStorageFeatures;
+
+  set_features2.features.shaderInt16 = true;
+  set_features12.shaderFloat16 = true;
+  set_features12.shaderInt8 = true;
+  set_features12.vulkanMemoryModel = true;
+  set_features12.vulkanMemoryModelDeviceScope = true;
+  set_features12.storageBuffer8BitAccess = true;
+  set_features12.uniformAndStorageBuffer8BitAccess = true;
+  set_16BitStorageFeatures.storageBuffer16BitAccess = true;
+  set_16BitStorageFeatures.uniformAndStorageBuffer16BitAccess = true;
+
   VkDeviceCreateInfo device_create_info = {};
   device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  device_create_info.pNext = nullptr;
+  device_create_info.pNext = &set_features2;
   device_create_info.flags = 0;
   device_create_info.queueCreateInfoCount = 1;
   device_create_info.pQueueCreateInfos = &queue_create_info;
   device_create_info.enabledLayerCount = 0;
   device_create_info.ppEnabledLayerNames = nullptr;
-  device_create_info.enabledExtensionCount = 0;
-  device_create_info.ppEnabledExtensionNames = nullptr;
+  device_create_info.enabledExtensionCount = required_extensions.size();
+  device_create_info.ppEnabledExtensionNames = required_extensions.data();
   device_create_info.pEnabledFeatures = nullptr;
 
   VkDevice device;

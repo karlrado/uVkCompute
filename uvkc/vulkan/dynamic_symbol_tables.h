@@ -314,7 +314,7 @@ namespace vulkan {
   INS_PFN(EXCLUDED, vkSubmitDebugUtilsMessageEXT)                       \
   INS_PFN(REQUIRED, vkCreateDevice)                                     \
   INS_PFN(EXCLUDED, vkCreateDisplayModeKHR)                             \
-  INS_PFN(EXCLUDED, vkEnumerateDeviceExtensionProperties)               \
+  INS_PFN(REQUIRED, vkEnumerateDeviceExtensionProperties)               \
   INS_PFN(EXCLUDED, vkEnumerateDeviceLayerProperties)                   \
   INS_PFN(EXCLUDED, vkGetDisplayModeProperties2KHR)                     \
   INS_PFN(EXCLUDED, vkGetDisplayModePropertiesKHR)                      \
@@ -335,7 +335,7 @@ namespace vulkan {
   INS_PFN(EXCLUDED, vkGetPhysicalDeviceExternalSemaphoreProperties)     \
   INS_PFN(EXCLUDED, vkGetPhysicalDeviceExternalSemaphorePropertiesKHR)  \
   INS_PFN(REQUIRED, vkGetPhysicalDeviceFeatures)                        \
-  INS_PFN(EXCLUDED, vkGetPhysicalDeviceFeatures2)                       \
+  INS_PFN(REQUIRED, vkGetPhysicalDeviceFeatures2)                       \
   INS_PFN(EXCLUDED, vkGetPhysicalDeviceFeatures2KHR)                    \
   INS_PFN(EXCLUDED, vkGetPhysicalDeviceFormatProperties)                \
   INS_PFN(EXCLUDED, vkGetPhysicalDeviceFormatProperties2)               \
