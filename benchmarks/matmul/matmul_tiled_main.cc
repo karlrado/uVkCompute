@@ -297,9 +297,10 @@ static void MatMul(::benchmark::State &state, ::uvkc::vulkan::Device *device,
           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, src1_size));
   BM_CHECK_OK_AND_ASSIGN(
       auto dst_buffer,
-      device->CreateBuffer(
-          VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, dst_size));
+      device->CreateBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                               VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, dst_size));
 
   VkExtent3D dimensions1 = {uint32_t(N / 8), uint32_t(K), 1};
   BM_CHECK_OK_AND_ASSIGN(

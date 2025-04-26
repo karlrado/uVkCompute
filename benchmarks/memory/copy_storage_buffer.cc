@@ -89,7 +89,8 @@ static void CopyStorageBuffer(
   BM_CHECK_OK_AND_ASSIGN(
       auto dst_buffer,
       device->CreateBuffer(
-          VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+          VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer_num_bytes));
 
   //===-------------------------------------------------------------------===/
